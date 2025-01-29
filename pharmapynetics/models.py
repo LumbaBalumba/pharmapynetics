@@ -183,7 +183,7 @@ class PBFTPK(BaseModel):
         return x
 
 
-class EnsembledPBFTPK(BaseModel):
+class EPBFTPK(BaseModel):
     n_models: int
     models: list[PBFTPK]
     base_model: Literal["PBFTPK0"] | Literal["PBFTPK1"]
