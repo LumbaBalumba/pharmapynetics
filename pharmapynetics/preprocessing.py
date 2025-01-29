@@ -4,7 +4,7 @@ from scipy.signal import find_peaks
 import numpy as np
 
 
-class TauSeeker:
+class TauEstimator:
     method: Literal["minmax"] | Literal["peak"]
 
     def __init__(self, method: Literal["minmax"] | Literal["peak"]) -> None:
@@ -34,7 +34,7 @@ class TauSeeker:
         self, t: np.ndarray, X: np.ndarray, t_max: float
     ) -> tuple[float, float]:
         return (
-            TauSeeker.minmax_seek(t, X, t_max)
+            TauEstimator.minmax_seek(t, X, t_max)
             if self.method == "minmax"
-            else TauSeeker.peak_seek(t, X, t_max)
+            else TauEstimator.peak_seek(t, X, t_max)
         )

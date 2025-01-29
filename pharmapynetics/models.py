@@ -4,7 +4,8 @@ import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, minimize
 from sklearn.preprocessing import MinMaxScaler as Scaler
 
-from pharmapynetics.preprocessing import TauSeeker
+from pharmapynetics.preprocessing import TauEstimator
+from pharmapynetics.metrics import Metric, WMSE, ClippedWMSE
 
 
 class BaseModel:
@@ -24,15 +25,17 @@ class PBFTPK(BaseModel):
     V_d: float
     k_a: float
     k_el: float
-    tau_1: float
-    tau_2: float
-    tau_3: float
-    alpha: float
+    tau_0: float
+    tau: float
+    t_max: float
+    l: float
+    clipped: bool
     scaler: Scaler
     base_model: Callable[
         [np.ndarray, float, float, float, float, float, float, float], np.ndarray
     ]
-    tau_seeker: TauSeeker
+    tau_estimator: TauEstimator
+    metric: Metric
 
     @staticmethod
     def PBFTPK0(
@@ -42,24 +45,24 @@ class PBFTPK(BaseModel):
         V_d: float,
         k_a: float,
         k_el: float,
-        tau_1: float,
-        tau_2: float,
+        tau_0: float,
+        tau: float,
     ) -> np.ndarray:
         X = np.zeros_like(t)
 
         def absorption_model(t: np.ndarray | float) -> np.ndarray | float:
-            t = np.array(t) - tau_1
-            return F * D / V_d / k_el / (tau_2 - tau_1) * (1 - np.exp(-k_el * (t)))
+            t = np.array(t) - tau_0
+            return F * D / V_d / k_el / (tau - tau_0) * (1 - np.exp(-k_el * (t)))
 
-        idx_a = (tau_1 < t) & (t <= tau_2)
+        idx_a = (tau_0 < t) & (t <= tau)
         X[idx_a] = absorption_model(t[idx_a])
         C_max = X[idx_a][-1] if len(X[idx_a]) > 0 else 1
 
         def elimination_model(t: np.ndarray | float) -> np.ndarray | float:
-            t = np.array(t) - tau_1
-            return C_max * np.exp(-k_el * (t - tau_2))
+            t = np.array(t) - tau_0
+            return C_max * np.exp(-k_el * (t - tau))
 
-        idx_el = t > tau_2
+        idx_el = t > tau
         X[idx_el] = elimination_model(t[idx_el])
 
         return X
@@ -72,13 +75,13 @@ class PBFTPK(BaseModel):
         V_d: float,
         k_a: float,
         k_el: float,
-        tau_1: float,
-        tau_2: float,
+        tau_0: float,
+        tau: float,
     ) -> np.ndarray:
         X = np.zeros_like(t)
 
         def absorption_model(t: np.ndarray | float) -> np.ndarray | float:
-            t = np.array(t) - tau_1
+            t = np.array(t) - tau_0
             return (
                 F
                 * D
@@ -88,31 +91,33 @@ class PBFTPK(BaseModel):
                 * (np.exp(-k_el * (t)) - np.exp(-k_a * (t)))
             )
 
-        idx_a = (tau_1 < t) & (t <= tau_2)
+        idx_a = (tau_0 < t) & (t <= tau)
         X[idx_a] = absorption_model(t[idx_a])
         C_max = X[idx_a][-1] if len(X[idx_a]) > 0 else 1
 
         def elimination_model(t: np.ndarray | float) -> np.ndarray | float:
-            t = np.array(t) - tau_1
-            return C_max * np.exp(-k_el * (t - tau_2))
+            t = np.array(t) - tau_0
+            return C_max * np.exp(-k_el * (t - tau))
 
-        idx_el = t > tau_2
+        idx_el = t > tau
         X[idx_el] = elimination_model(t[idx_el])
 
         return X
 
     def __init__(
         self,
-        alpha: float = 1.0,
-        tau_3: float = float("inf"),
+        l: float = 1.0,
+        t_max: float = float("inf"),
         base_model: Literal["PBFTPK0"] | Literal["PBFTPK1"] = "PBFTPK1",
-        tau_seek_method: Literal["minmax"] | Literal["peak"] = "peak",
+        tau_estimation_method: Literal["minmax"] | Literal["peak"] = "peak",
+        clipped: bool = False,
     ) -> None:
         self.initilized = False
-        self.alpha = alpha
-        self.tau_3 = tau_3
+        self.l = l
+        self.t_max = t_max
         self.base_model = PBFTPK.PBFTPK0 if base_model == "PBFTPK0" else PBFTPK.PBFTPK1
-        self.tau_seeker = TauSeeker(tau_seek_method)
+        self.tau_estimator = TauEstimator(tau_estimation_method)
+        self.clipped = clipped
 
     def fit(self, t: np.ndarray, X: np.ndarray) -> None:
         self.initilized = True
@@ -124,9 +129,15 @@ class PBFTPK(BaseModel):
         t = data[:, 0]
         X = data[:, 1]
 
-        self.tau_1, self.tau_2 = self.tau_seeker.process(t, X, self.tau_3)
+        self.tau_0, self.tau = self.tau_estimator.process(t, X, self.t_max)
 
-        X[t < self.tau_1] = 0.0
+        X[t < self.tau_0] = 0.0
+
+        self.metric = (
+            ClippedWMSE(l=self.l, tau=self.tau, t_max=self.t_max)
+            if self.clipped
+            else WMSE(l=self.l, tau=self.tau)
+        )
 
         params_initial = [1.3, 0.5, 1, 1, 2]
 
@@ -136,11 +147,9 @@ class PBFTPK(BaseModel):
 
         def target_function(params):
             D, F, V_d, k_a, k_el = params
-            r = (
-                self.base_model(t, D, F, V_d, k_a, k_el, self.tau_1, self.tau_2) - X
-            ) ** 2
-            r[t > self.tau_2] *= self.alpha
-            return np.mean(r)
+            return self.metric.estimate(
+                self.base_model(t, D, F, V_d, k_a, k_el, self.tau_0, self.tau), X, t
+            )
 
         res = minimize(
             target_function,
@@ -160,7 +169,7 @@ class PBFTPK(BaseModel):
         t = data[:, 0]
 
         X = self.base_model(
-            t, self.D, self.F, self.V_d, self.k_a, self.k_el, self.tau_1, self.tau_2
+            t, self.D, self.F, self.V_d, self.k_a, self.k_el, self.tau_0, self.tau
         )
 
         data = np.column_stack([t, X])
@@ -178,35 +187,39 @@ class EnsembledPBFTPK(BaseModel):
     n_models: int
     models: list[PBFTPK]
     base_model: Literal["PBFTPK0"] | Literal["PBFTPK1"]
-    tau_seek_method: Literal["minmax"] | Literal["peak"]
+    tau_estimation_method: Literal["minmax"] | Literal["peak"]
+    clipped: bool
 
     def __init__(
         self,
         n_models: int = 1,
-        alpha: float | list[float] | np.ndarray = 1.0,
+        l: float | list[float] | np.ndarray = 1.0,
         base_model: Literal["PBFTPK0"] | Literal["PBFTPK1"] = "PBFTPK1",
-        tau_seek_method: Literal["minmax"] | Literal["peak"] = "peak",
+        tau_estimation_method: Literal["minmax"] | Literal["peak"] = "peak",
+        clipped: bool = False,
     ):
         self.n_models = n_models
-        self.alpha = np.ones(n_models) * alpha
+        self.l = np.ones(n_models) * l
         self.models = []
         self.base_model = base_model
-        self.tau_seek_method = tau_seek_method
+        self.tau_estimation_method = tau_estimation_method
+        self.clipped = clipped
 
     def fit(self, t: np.ndarray, X: np.ndarray) -> None:
         r = X.copy()
-        tau_3 = float("inf")
+        t_max = float("inf")
         for i in range(self.n_models):
             model = PBFTPK(
-                alpha=self.alpha[i],
-                tau_3=tau_3,
+                l=self.l[i],
+                t_max=t_max,
                 base_model=self.base_model,
-                tau_seek_method=self.tau_seek_method,
+                tau_estimation_method=self.tau_estimation_method,
+                clipped=self.clipped,
             )
             model.fit(t, r)
             self.models.append(model)
             r -= self.models[i].sample(t)
-            tau_3 = model.tau_2
+            t_max = model.tau
 
     def sample(self, t: np.ndarray) -> np.ndarray:
         X = np.zeros_like(t)
