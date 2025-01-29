@@ -12,7 +12,7 @@ class BaseModel:
     def __init__(self, *args, **kwargs) -> None:
         pass
 
-    def fit(self, t: np.ndarray, X: np.ndarray) -> None:
+    def fit(self, t: np.ndarray, x: np.ndarray) -> None:
         pass
 
     def sample(self, t: np.ndarray) -> np.ndarray:
@@ -20,9 +20,9 @@ class BaseModel:
 
 
 class PBFTPK(BaseModel):
-    D: float
-    F: float
-    V_d: float
+    d: float
+    f: float
+    v_d: float
     k_a: float
     k_el: float
     tau_0: float
@@ -40,69 +40,69 @@ class PBFTPK(BaseModel):
     @staticmethod
     def PBFTPK0(
         t: np.ndarray,
-        D: float,
-        F: float,
-        V_d: float,
+        d: float,
+        f: float,
+        v_d: float,
         k_a: float,
         k_el: float,
         tau_0: float,
         tau: float,
     ) -> np.ndarray:
-        X = np.zeros_like(t)
+        x = np.zeros_like(t)
 
-        def absorbtion_model(t: np.ndarray | float) -> np.ndarray | float:
+        def absorption_model(t: np.ndarray | float) -> np.ndarray | float:
             t = np.array(t) - tau_0
-            return F * D / V_d / k_el / (tau - tau_0) * (1 - np.exp(-k_el * (t)))
+            return f * d / v_d / k_el / (tau - tau_0) * (1 - np.exp(-k_el * (t)))
 
         idx_a = (tau_0 < t) & (t <= tau)
-        X[idx_a] = absorbtion_model(t[idx_a])
-        C_max = X[idx_a][-1] if len(X[idx_a]) > 0 else 1
+        x[idx_a] = absorption_model(t[idx_a])
+        c_max = x[idx_a][-1] if len(x[idx_a]) > 0 else 1
 
         def elimination_model(t: np.ndarray | float) -> np.ndarray | float:
             t = np.array(t) - tau_0
-            return C_max * np.exp(-k_el * (t - tau))
+            return c_max * np.exp(-k_el * (t - tau))
 
         idx_el = t > tau
-        X[idx_el] = elimination_model(t[idx_el])
+        x[idx_el] = elimination_model(t[idx_el])
 
-        return X
+        return x
 
     @staticmethod
     def PBFTPK1(
         t: np.ndarray,
-        D: float,
-        F: float,
-        V_d: float,
+        d: float,
+        f: float,
+        v_d: float,
         k_a: float,
         k_el: float,
         tau_0: float,
         tau: float,
     ) -> np.ndarray:
-        X = np.zeros_like(t)
+        x = np.zeros_like(t)
 
         def absorption_model(t: np.ndarray | float) -> np.ndarray | float:
             t = np.array(t) - tau_0
             return (
-                F
-                * D
+                f
+                * d
                 * k_a
-                / V_d
+                / v_d
                 / (k_a - k_el)
                 * (np.exp(-k_el * (t)) - np.exp(-k_a * (t)))
             )
 
         idx_a = (tau_0 < t) & (t <= tau)
-        X[idx_a] = absorption_model(t[idx_a])
-        C_max = X[idx_a][-1] if len(X[idx_a]) > 0 else 1
+        x[idx_a] = absorption_model(t[idx_a])
+        c_max = x[idx_a][-1] if len(x[idx_a]) > 0 else 1
 
         def elimination_model(t: np.ndarray | float) -> np.ndarray | float:
             t = np.array(t) - tau_0
-            return C_max * np.exp(-k_el * (t - tau))
+            return c_max * np.exp(-k_el * (t - tau))
 
         idx_el = t > tau
-        X[idx_el] = elimination_model(t[idx_el])
+        x[idx_el] = elimination_model(t[idx_el])
 
-        return X
+        return x
 
     def __init__(
         self,
@@ -119,19 +119,19 @@ class PBFTPK(BaseModel):
         self.tau_estimator = TauEstimator(tau_estimation_method)
         self.clipped = clipped
 
-    def fit(self, t: np.ndarray, X: np.ndarray) -> None:
+    def fit(self, t: np.ndarray, x: np.ndarray) -> None:
         self.initilized = True
 
-        data = np.column_stack([t, X])
+        data = np.column_stack([t, x])
         self.scaler = Scaler()
         data = self.scaler.fit_transform(data)
 
         t = data[:, 0]
-        X = data[:, 1]
+        x = data[:, 1]
 
-        self.tau_0, self.tau = self.tau_estimator.process(t, X, self.t_max)
+        self.tau_0, self.tau = self.tau_estimator.process(t, x, self.t_max)
 
-        X[t < self.tau_0] = 0.0
+        x[t < self.tau_0] = 0.0
 
         self.metric = (
             ClippedWMSE(l=self.l, tau=self.tau, t_max=self.t_max)
@@ -146,9 +146,9 @@ class PBFTPK(BaseModel):
         bounds = Bounds(lb=1e-4, ub=[1e3, 1.0, 1e4, 300, 300])
 
         def target_function(params):
-            D, F, V_d, k_a, k_el = params
+            d, f, v_d, k_a, k_el = params
             return self.metric.estimate(
-                self.base_model(t, D, F, V_d, k_a, k_el, self.tau_0, self.tau), X, t
+                self.base_model(t, d, f, v_d, k_a, k_el, self.tau_0, self.tau), x, t
             )
 
         res = minimize(
@@ -159,7 +159,7 @@ class PBFTPK(BaseModel):
             method="SLSQP",
         )
 
-        self.D, self.F, self.V_d, self.k_a, self.k_el = res.x
+        self.d, self.f, self.v_d, self.k_a, self.k_el = res.x
 
     def sample(self, t: np.ndarray) -> np.ndarray:
         data = np.column_stack([t, np.zeros_like(t)])
@@ -168,19 +168,19 @@ class PBFTPK(BaseModel):
 
         t = data[:, 0]
 
-        X = self.base_model(
-            t, self.D, self.F, self.V_d, self.k_a, self.k_el, self.tau_0, self.tau
+        x = self.base_model(
+            t, self.d, self.f, self.v_d, self.k_a, self.k_el, self.tau_0, self.tau
         )
 
-        data = np.column_stack([t, X])
+        data = np.column_stack([t, x])
 
         data = self.scaler.inverse_transform(data)
 
-        X = data[:, 1]
+        x = data[:, 1]
 
-        X[X < 0] = 0
+        x[x < 0] = 0
 
-        return X
+        return x
 
 
 class EnsembledPBFTPK(BaseModel):
@@ -208,8 +208,8 @@ class EnsembledPBFTPK(BaseModel):
         self.clipped = clipped
         self.t_max = t_max
 
-    def fit(self, t: np.ndarray, X: np.ndarray) -> None:
-        r = X.copy()
+    def fit(self, t: np.ndarray, x: np.ndarray) -> None:
+        r = x.copy()
         t_max = self.t_max
         for i in range(self.n_models):
             model = PBFTPK(
@@ -225,7 +225,7 @@ class EnsembledPBFTPK(BaseModel):
             t_max = model.tau
 
     def sample(self, t: np.ndarray) -> np.ndarray:
-        X = np.zeros_like(t)
+        x = np.zeros_like(t)
         for model in self.models:
-            X += model.sample(t)
-        return X
+            x += model.sample(t)
+        return x

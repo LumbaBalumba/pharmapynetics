@@ -7,9 +7,9 @@ class Metric:
         pass
 
     def array_estimate(
-        self, C1: np.ndarray, C2: np.ndarray, t: np.ndarray
+        self, c1: np.ndarray, c2: np.ndarray, t: np.ndarray
     ) -> np.ndarray:
-        return np.abs(C1 - C2)
+        return np.abs(c1 - c2)
 
     def estimate(self, C1: np.ndarray, C2: np.ndarray, t: np.ndarray) -> float:
         return float(np.mean(self.array_estimate(C1, C2, t)))
@@ -21,9 +21,9 @@ class MSE(Metric):
 
     @override
     def array_estimate(
-        self, C1: np.ndarray, C2: np.ndarray, t: np.ndarray
+        self, c1: np.ndarray, c2: np.ndarray, t: np.ndarray
     ) -> np.ndarray:
-        return (C1 - C2) ** 2
+        return (c1 - c2) ** 2
 
 
 class WMSE(Metric):
@@ -36,9 +36,9 @@ class WMSE(Metric):
         super().__init__()
 
     def array_estimate(
-        self, C1: np.ndarray, C2: np.ndarray, t: np.ndarray
+        self, c1: np.ndarray, c2: np.ndarray, t: np.ndarray
     ) -> np.ndarray:
-        est = super().array_estimate(C1, C2, t)
+        est = super().array_estimate(c1, c2, t)
         est[t > self.tau] *= self.l
         return est
 
@@ -51,8 +51,8 @@ class ClippedWMSE(WMSE):
         self.t_max = t_max
 
     def array_estimate(
-        self, C1: np.ndarray, C2: np.ndarray, t: np.ndarray
+        self, c1: np.ndarray, c2: np.ndarray, t: np.ndarray
     ) -> np.ndarray:
-        est = super().array_estimate(C1, C2, t)
+        est = super().array_estimate(c1, c2, t)
         est[t > self.t_max] *= 0
         return est
