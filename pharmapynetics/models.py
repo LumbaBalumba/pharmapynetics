@@ -189,6 +189,7 @@ class EnsembledPBFTPK(BaseModel):
     base_model: Literal["PBFTPK0"] | Literal["PBFTPK1"]
     tau_estimation_method: Literal["minmax"] | Literal["peak"]
     clipped: bool
+    t_max: float
 
     def __init__(
         self,
@@ -197,6 +198,7 @@ class EnsembledPBFTPK(BaseModel):
         base_model: Literal["PBFTPK0"] | Literal["PBFTPK1"] = "PBFTPK1",
         tau_estimation_method: Literal["minmax"] | Literal["peak"] = "peak",
         clipped: bool = False,
+        t_max: float = float("inf"),
     ):
         self.n_models = n_models
         self.l = np.ones(n_models) * l
@@ -204,10 +206,11 @@ class EnsembledPBFTPK(BaseModel):
         self.base_model = base_model
         self.tau_estimation_method = tau_estimation_method
         self.clipped = clipped
+        self.t_max = t_max
 
     def fit(self, t: np.ndarray, X: np.ndarray) -> None:
         r = X.copy()
-        t_max = float("inf")
+        t_max = self.t_max
         for i in range(self.n_models):
             model = PBFTPK(
                 l=self.l[i],
