@@ -50,12 +50,12 @@ class PBFTPK(BaseModel):
     ) -> np.ndarray:
         X = np.zeros_like(t)
 
-        def absorption_model(t: np.ndarray | float) -> np.ndarray | float:
+        def absorbtion_model(t: np.ndarray | float) -> np.ndarray | float:
             t = np.array(t) - tau_0
             return F * D / V_d / k_el / (tau - tau_0) * (1 - np.exp(-k_el * (t)))
 
         idx_a = (tau_0 < t) & (t <= tau)
-        X[idx_a] = absorption_model(t[idx_a])
+        X[idx_a] = absorbtion_model(t[idx_a])
         C_max = X[idx_a][-1] if len(X[idx_a]) > 0 else 1
 
         def elimination_model(t: np.ndarray | float) -> np.ndarray | float:
