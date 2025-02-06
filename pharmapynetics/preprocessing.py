@@ -26,9 +26,13 @@ class TauEstimator:
 
     @staticmethod
     def minmax(t: np.ndarray, x: np.ndarray, t_max: float) -> tuple[float, float]:
-        tau_2 = t[np.argmax(x[t < t_max])]
-        tau_1 = t[np.argmax(x[t < tau_2])]
-        return tau_1, tau_2
+        idx = t < t_max
+        if np.any(idx):
+            tau_2 = t[np.argmax(x[idx])]
+            tau_1 = t[np.argmax(x[idx])]
+            return tau_1, tau_2
+        else:
+            return 0, np.inf
 
     def process(
         self, t: np.ndarray, x: np.ndarray, t_max: float
