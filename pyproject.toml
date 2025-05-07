@@ -9,7 +9,6 @@ classifiers = [
   "Operating System :: OS Independent",
 ]
 license = "MIT"
-license-files = ["LICEN[CS]E*"]
 
 [tool.poetry.dependencies]
 python = "^3.11"
