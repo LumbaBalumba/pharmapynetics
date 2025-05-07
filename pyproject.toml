@@ -4,6 +4,12 @@ version = "0.1.1"
 description = ""
 authors = ["LumbaBalumba <vlad.lazar.ik528@yandex.ru>"]
 readme = "README.md"
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+]
+license = "MIT"
+license-files = ["LICEN[CS]E*"]
 
 [tool.poetry.dependencies]
 python = "^3.11"
