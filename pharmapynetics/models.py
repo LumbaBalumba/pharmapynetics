@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from typing import Callable, Literal
 
 import numpy as np
@@ -229,3 +231,8 @@ class EPBFTPK(BaseModel):
         for model in self.models:
             x += model.sample(t)
         return x
+
+    def add_model(self, *args, **kwargs) -> EPBFTPK:
+        self.n_models += 1
+        self.models.append(PBFTPK(*args, **kwargs))
+        return self
