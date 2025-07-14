@@ -1,4 +1,4 @@
-from typing import Callable, Literal
+from typing import Callable, Literal, override
 
 import numpy as np
 from scipy.optimize import Bounds, LinearConstraint, minimize
@@ -112,15 +112,34 @@ class PBFTPK(BaseModel):
         tau_estimation_method: Literal["minmax"] | Literal["peak"] = "peak",
         clipped: bool = False,
     ) -> None:
-        self.initilized = False
+        self.initialized = False
         self.l = l
         self.t_max = t_max
         self.base_model = PBFTPK.PBFTPK0 if base_model == "PBFTPK0" else PBFTPK.PBFTPK1
         self.tau_estimator = TauEstimator(tau_estimation_method)
         self.clipped = clipped
 
+    @staticmethod
+    def bounds() -> Bounds:
+        return Bounds(lb=1e-6, ub=[1e3, 1.0, 1e4, 3e2, 3e2])
+
+    @staticmethod
+    def constraints() -> LinearConstraint:
+        return LinearConstraint([[0, 0, 0, 1, -1]], ub=-1e-6)
+
+    def loss(
+        self,
+        params: tuple[float, float, float, float, float],
+        t: np.ndarray,
+        x: np.ndarray,
+    ) -> float:
+        d, f, v_d, k_a, k_el = params
+        return self.metric.estimate(
+            self.base_model(t, d, f, v_d, k_a, k_el, self.tau_0, self.tau), x, t
+        )
+
     def fit(self, t: np.ndarray, x: np.ndarray) -> None:
-        self.initilized = True
+        self.initialized = True
 
         data = np.column_stack([t, x])
         self.scaler = Scaler()
@@ -141,18 +160,12 @@ class PBFTPK(BaseModel):
 
         params_initial = [1.3, 0.5, 1, 1, 2]
 
-        cons = LinearConstraint([[0, 0, 0, 1, -1]], ub=-1e-4)
+        cons = self.constraints()
 
-        bounds = Bounds(lb=1e-4, ub=[1e3, 1.0, 1e4, 300, 300])
-
-        def target_function(params):
-            d, f, v_d, k_a, k_el = params
-            return self.metric.estimate(
-                self.base_model(t, d, f, v_d, k_a, k_el, self.tau_0, self.tau), x, t
-            )
+        bounds = self.bounds()
 
         res = minimize(
-            target_function,
+            lambda params: self.loss(params, t, x),
             constraints=cons,
             bounds=bounds,
             x0=params_initial,
