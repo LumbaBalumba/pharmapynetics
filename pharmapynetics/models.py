@@ -32,7 +32,7 @@ class PBFTPK(BaseModel):
     t_max: float
     l: float
     clipped: bool
-    scaler: Scaler
+    scaler: Scaler | None
     base_model: Callable[
         [np.ndarray, float, float, float, float, float, float, float], np.ndarray
     ]
@@ -113,6 +113,7 @@ class PBFTPK(BaseModel):
         base_model: Literal["PBFTPK0"] | Literal["PBFTPK1"] = "PBFTPK1",
         tau_estimation_method: Literal["minmax"] | Literal["peak"] = "peak",
         clipped: bool = False,
+        use_scaler: bool = False,
     ) -> None:
         self.initilized = False
         self.l = l
@@ -120,13 +121,14 @@ class PBFTPK(BaseModel):
         self.base_model = PBFTPK.PBFTPK0 if base_model == "PBFTPK0" else PBFTPK.PBFTPK1
         self.tau_estimator = TauEstimator(tau_estimation_method)
         self.clipped = clipped
+        self.scaler = Scaler() if use_scaler else None
 
     def fit(self, t: np.ndarray, x: np.ndarray) -> None:
         self.initilized = True
 
         data = np.column_stack([t, x])
-        self.scaler = Scaler()
-        data = self.scaler.fit_transform(data)
+        if self.scaler is not None:
+            data = self.scaler.fit_transform(data)
 
         t = data[:, 0]
         x = data[:, 1]
@@ -166,7 +168,8 @@ class PBFTPK(BaseModel):
     def sample(self, t: np.ndarray) -> np.ndarray:
         data = np.column_stack([t, np.zeros_like(t)])
 
-        data = self.scaler.transform(data)
+        if self.scaler is not None
+            data = self.scaler.transform(data)
 
         t = data[:, 0]
 
@@ -176,7 +179,8 @@ class PBFTPK(BaseModel):
 
         data = np.column_stack([t, x])
 
-        data = self.scaler.inverse_transform(data)
+        if self.scaler is not None:
+            data = self.scaler.inverse_transform(data)
 
         x = data[:, 1]
 

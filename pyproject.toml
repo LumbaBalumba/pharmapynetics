@@ -1,7 +1,7 @@
 [tool.poetry]
 name = "pharmapynetics"
 version = "0.1.1"
-description = "README.md"
+description = ""
 authors = ["LumbaBalumba <vlad.lazar.ik528@yandex.ru>"]
 readme = "README.md"
 classifiers = [
