@@ -168,7 +168,7 @@ class PBFTPK(BaseModel):
     def sample(self, t: np.ndarray) -> np.ndarray:
         data = np.column_stack([t, np.zeros_like(t)])
 
-        if self.scaler is not None
+        if self.scaler is not None:
             data = self.scaler.transform(data)
 
         t = data[:, 0]
