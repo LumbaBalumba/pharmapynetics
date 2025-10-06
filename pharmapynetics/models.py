@@ -91,7 +91,7 @@ class PBFTPK(BaseModel):
                 * (np.exp(-k_el * (t)) - np.exp(-k_a * (t)))
             )
 
-        idx_a = (tau_0 < t) & (t <= tau)
+        idx_a = (tau_0 <= t) & (t < tau)
         x[idx_a] = absorption_model(t[idx_a])
         c_max = x[idx_a][-1] if len(x[idx_a]) > 0 else 1
 
@@ -99,7 +99,7 @@ class PBFTPK(BaseModel):
             t = np.array(t) - tau_0
             return c_max * np.exp(-k_el * (t - tau))
 
-        idx_el = t > tau
+        idx_el = t >= tau
         x[idx_el] = elimination_model(t[idx_el])
 
         return x
