@@ -36,7 +36,7 @@ class PBFTPK(BaseModel):
     base_model: Callable[
         [np.ndarray, float, float, float, float, float, float, float], np.ndarray
     ]
-    tau_estimator: TauEstimator
+    tau_estimator: TauEstimator | None
     metric: Metric
 
     @staticmethod
@@ -113,7 +113,7 @@ class PBFTPK(BaseModel):
         base_model: Literal["PBFTPK0"] | Literal["PBFTPK1"] = "PBFTPK1",
         tau_estimation_method: Literal["minmax"] | Literal["peak"] = "peak",
         clipped: bool = False,
-        use_scaler: bool = False,
+        use_scaler: bool = True,
     ) -> None:
         self.initilized = False
         self.l = l
